@@ -1,67 +1,4 @@
-a<-1234578
-library(mgcv)
-set.seed(a)
-require(SimDesign)
-SimFunctions()
-des<-createDesign(sample_size = c(30, 60, 100, 150),
-                  method = c("LL", "KS","SS"),no.cov=c(2,4))
-Generate  <- function(condition, fixed_objects = NULL) {
-  n       <- condition$sample_size
-  method  <- condition$method
-  criteria<- condition$criteria
-  no.cov  <- condition$no.cov
-  if(no.cov == 2){
-    t<-0
-    x<-matrix(c(runif(n),runif(n)),n,2)
-    for (j in 1:n){
-      t[j]<-(j-0.5)/n
-    }
-    z<-seq(-2,2,length.out = n)
-    f1<-1-48*t+218*t^2-315*t^3+145*t^4
-    f2<-sin(2*z)+2*exp(-16*z^2)
-    beta<-c(-1,2)
-    error<-rnorm(n,sd=0.5)
-    y<-x%*%beta+f1+f2+error
-    nc<-matrix(c(t,z),n,2)
-    allf<-matrix(c(f1,f2),n,2)
-    dat<-new.env()
-    dat$x<-x
-    dat$y<-y
-    dat$nc<-nc
-    dat$beta<-beta
-    dat$allf<-allf
-  } 
-  else if(no.cov == 4){
-    t2<-0
-    t<-0
-    x<-matrix(c(runif(n),runif(n)),n,2)
-    for (j in 1:n){
-      t[j] <-(j-0.5)/n
-      t2[j]<-5*(j-0.5)/n
-    }
-    z<-seq(-2,2,length.out = n)
-    z2<-seq(-2,2,length.out = n)
-    f1<-1-48*t+218*t^2-315*t^3+145*t^4
-    f2<-sin(2*z)+2*exp(-16*z^2)
-    f3<-t2*(sin(t2))^2
-    f4<-z2+2*exp(-15*z2^2)
-    beta<-c(-1,2)
-    error<-rnorm(n,sd=0.5)
-    y<-x%*%beta+f1+f2+f3+f4+error
-    nc<-matrix(c(t,t2,z,z2),n,4)
-    allf<-matrix(c(f1,f2,f3,f4),n,4)
-    dat<-new.env()
-    dat$x<-x
-    dat$y<-y
-    dat$nc<-nc
-    dat$beta<-beta
-    dat$allf<-allf
-  }
-  dat
-}
-Analyse <- function(condition, dat, fixed_objects = NULL) {
-  
-  SPAMLL<-function(x,y,nc,allf){
+SPAMLL<-function(x,y,nc,allf){
     library(optR)
     library(psych)
     library(pracma)
@@ -82,12 +19,12 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       f1<-allf[,1]
       f2<-allf[,2]
       n<-length(y)
-      z1<-nc[,1]
-      z2<-nc[,2]
+      z1<-scale(nc[,1])     # After Revision 3
+      z2<-scale(nc[,2])     # After Revision 3
       #BACKFITTING PROCEDURE----------------------------------------------------
       #Initialization-----------------------------------------------------------
-      f01 <- fitted(lm(y~z1))
-      f02 <- fitted(lm(y~z2))
+      f01 <- fitted(lm(y~z1+x[,1]+x[,2]))
+      f02 <- fitted(lm(y~z2+x[,1]+x[,2]))
       #SMOOTHING MATRIX FOR KS--------------------------------------------------
       Smat<-function(z,bw){
         library(condSURV)
@@ -222,27 +159,27 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       
       fh1_cp <- matrix(0,n,iter)
       fh2_cp <- matrix(0,n,iter)
-      for (k in 1:2){
-        tp <- selectionLL(x,nc[,k],(y))
-        tp.aic <- tp$lam.aic
-        tp.gcv <- tp$lam.gcv
-        tp.cp  <- tp$lam.cp
-        S_aic  <- Smat(nc[,k],tp.aic) 
-        S_gcv  <- Smat(nc[,k],tp.gcv)
-        S_cp   <- Smat(nc[,k],tp.cp)
-        
-        xtil.aic <- (diag(n)-S_aic)%*%x
-        xtil.gcv <- (diag(n)-S_gcv)%*%x
-        xtil.cp  <- (diag(n)-S_cp)%*%x
-        
-        H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
-        H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
-        H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
-        
-        tol    <- 0.05
-        ctol   <- 99
-        i <- 1
-        while (ctol>=tol){
+      
+      tol    <- 0.05
+      ctol   <- 99
+      i <- 1
+      while (ctol>=tol){
+        for (k in 1:2){
+          tp <- selectionLL(x,nc[,k],(y))
+          tp.aic <- tp$lam.aic
+          tp.gcv <- tp$lam.gcv
+          tp.cp  <- tp$lam.cp
+          S_aic  <- Smat(nc[,k],tp.aic) 
+          S_gcv  <- Smat(nc[,k],tp.gcv)
+          S_cp   <- Smat(nc[,k],tp.cp)
+          
+          xtil.aic <- (diag(n)-S_aic)%*%x
+          xtil.gcv <- (diag(n)-S_gcv)%*%x
+          xtil.cp  <- (diag(n)-S_cp)%*%x
+          
+          H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
+          H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
+          H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
           
           betai_aic   <- solve(t(x)%*%x)%*%t(x)%*%(y-alpha0-(fhat_aic[,k]+fhat_aic[,-k])) 
           fhat_aic[,k]<- S_aic%*%(y-alpha0-(x%*%betai_aic)-fhat_aic[,-k])
@@ -276,10 +213,11 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
             tol1      <-(mean(abs(fh1_gcv[,(i-1)]-fhat1_gcv)))
             ctol <- (tol1+tol2)/2
           }
-          i <- i+1
-          if (i==iter){
-            break
-          }
+          
+        }
+        i <- i+1
+        if (i==iter){
+          break
         }
       }
       
@@ -327,20 +265,20 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       f4<-allf[,4]
       
       n<-length(y)
-      z1<-nc[,1]
-      z2<-nc[,3]
-      z3<-nc[,2]
-      z4<-nc[,4]
+      z1<-scale(nc[,1])
+      z2<-scale(nc[,3])
+      z3<-scale(nc[,2])
+      z4<-scale(nc[,4])
       
       #------------------------------------
       #LLR estimator for SPAM Part (Non-iterative)
       #Selection of Bandwidth---------------------------------------------------------
       
       #Initialization-----------------------------------------------------------
-      f01 <- fitted(lm(y~z1))
-      f02 <- fitted(lm(y~z2))
-      f03 <- fitted(lm(y~z3))
-      f04 <- fitted(lm(y~z4))
+      f01 <- fitted(lm(y~z1+x[,1]+x[,2]))
+      f02 <- fitted(lm(y~z2+x[,1]+x[,2]))
+      f03 <- fitted(lm(y~z3+x[,1]+x[,2]))
+      f04 <- fitted(lm(y~z4+x[,1]+x[,2]))
       
       #SMOOTHING MATRIX FOR KS--------------------------------------------------
       Smat<-function(z,bw){
@@ -490,28 +428,28 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       fh4_cp <- matrix(0,n,iter)
       ones <- matrix(1,n,1)
       x <- matrix(c(ones,x),n,3)
-      for (k in 1:4){
-        tp <- selectionLL(x,nc[,k],y)
-        tp.aic <- tp$lam.aic
-        tp.gcv <- tp$lam.gcv
-        tp.cp  <- tp$lam.cp
-        S_aic  <- Smat(nc[,k],tp.aic) 
-        S_gcv  <- Smat(nc[,k],tp.gcv)
-        S_cp   <- Smat(nc[,k],tp.cp)
-        
-        xtil.aic <- (diag(n)-S_aic)%*%x
-        xtil.gcv <- (diag(n)-S_gcv)%*%x
-        xtil.cp  <- (diag(n)-S_cp)%*%x
-        
-        H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
-        H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
-        H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
-        
-        ones <- matrix(1,n,1)
-        tol    <- 0.01
-        ctol   <- 99
-        i <- 1
-        while (ctol>=tol){
+      
+      ones <- matrix(1,n,1)
+      tol    <- 0.01
+      ctol   <- 99
+      i <- 1
+      while (ctol>=tol){
+        for (k in 1:4){
+          tp <- selectionLL(x,nc[,k],y)
+          tp.aic <- tp$lam.aic
+          tp.gcv <- tp$lam.gcv
+          tp.cp  <- tp$lam.cp
+          S_aic  <- Smat(nc[,k],tp.aic) 
+          S_gcv  <- Smat(nc[,k],tp.gcv)
+          S_cp   <- Smat(nc[,k],tp.cp)
+          
+          xtil.aic <- (diag(n)-S_aic)%*%x
+          xtil.gcv <- (diag(n)-S_gcv)%*%x
+          xtil.cp  <- (diag(n)-S_cp)%*%x
+          
+          H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
+          H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
+          H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
           
           betai_aic   <- solve(t(x)%*%x)%*%t(x)%*%(y-alpha0-(fhat_aic[,k]+rowSums(allf[,-k]))) 
           fhat_aic[,k]<- S_aic%*%(y-alpha0-(x%*%betai_aic)-rowSums(allf[,-k]))
@@ -563,10 +501,11 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
             tol1      <-(mean(abs(fh1_gcv[,(i-1)]-fhat1_gcv)))
             ctol <- (tol1+tol2)/2
           }
-          i <- i+1
-          if (i==iter){
-            break
-          }
+          
+        }
+        i <- i+1
+        if (i==iter){
+          break
         }
       }
       #-------------------------------------------------------------------------------
@@ -680,12 +619,12 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       f1<-allf[,1]
       f2<-allf[,2]
       n<-length(y)
-      z1<-nc[,1]
-      z2<-nc[,2]
+      z1<-scale(nc[,1])
+      z2<-scale(nc[,2])
       
       #Initialization-----------------------------------------------------------
-      f01 <- fitted(lm(y~z1))
-      f02 <- fitted(lm(y~z2)) 
+      f01 <- fitted(lm(y~z1+x[,1]+x[,2]))
+      f02 <- fitted(lm(y~z2+x[,1]+x[,2]))
       #------------------------------------------------------------------------
       Smat<-function(z,bw){
         K<-function(z){
@@ -809,27 +748,28 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       
       fh1_cp <- matrix(0,n,iter)
       fh2_cp <- matrix(0,n,iter)
-      for (k in 1:2){
-        tp <- selectionKS(x,nc[,k],(y))
-        tp.aic <- tp$lam.aic
-        tp.gcv <- tp$lam.gcv
-        tp.cp  <- tp$lam.cp
-        S_aic  <- Smat(nc[,k],tp.aic) 
-        S_gcv  <- Smat(nc[,k],tp.gcv)
-        S_cp   <- Smat(nc[,k],tp.cp)
-        
-        xtil.aic <- (diag(n)-S_aic)%*%x
-        xtil.gcv <- (diag(n)-S_gcv)%*%x
-        xtil.cp  <- (diag(n)-S_cp)%*%x
-        
-        H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
-        H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
-        H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
-        
-        tol    <- 0.05
-        ctol   <- 99
-        i <- 1
-        while (ctol>=tol){
+      
+      
+      tol    <- 0.05
+      ctol   <- 99
+      i <- 1
+      while (ctol>=tol){
+        for (k in 1:2){
+          tp <- selectionKS(x,nc[,k],(y))
+          tp.aic <- tp$lam.aic
+          tp.gcv <- tp$lam.gcv
+          tp.cp  <- tp$lam.cp
+          S_aic  <- Smat(nc[,k],tp.aic) 
+          S_gcv  <- Smat(nc[,k],tp.gcv)
+          S_cp   <- Smat(nc[,k],tp.cp)
+          
+          xtil.aic <- (diag(n)-S_aic)%*%x
+          xtil.gcv <- (diag(n)-S_gcv)%*%x
+          xtil.cp  <- (diag(n)-S_cp)%*%x
+          
+          H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
+          H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
+          H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
           
           betai_aic   <- solve(t(x)%*%x)%*%t(x)%*%(y-alpha0-(fhat_aic[,k]+fhat_aic[,-k])) 
           fhat_aic[,k]<- S_aic%*%(y-alpha0-(x%*%betai_aic)-fhat_aic[,-k])
@@ -863,10 +803,11 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
             tol1      <-(mean(abs(fh1_gcv[,(i-1)]-fhat1_gcv)))
             ctol <- (tol1+tol2)/2
           }
-          i <- i+1
-          if (i==iter){
-            break
-          }
+          
+        }
+        i <- i+1
+        if (i==iter){
+          break
         }
       }
       
@@ -914,17 +855,17 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       f4<-allf[,4]
       
       n<-length(y)
-      z1<-nc[,1]
-      z2<-nc[,3]
-      z3<-nc[,2]
-      z4<-nc[,4]
+      z1<-scale(nc[,1])
+      z2<-scale(nc[,3])
+      z3<-scale(nc[,2])
+      z4<-scale(nc[,4])
       
       #---------------------------------------------------------------------------
       #Initialization-----------------------------------------------------------
-      f01 <- fitted(lm(y~z1))
-      f02 <- fitted(lm(y~z2))
-      f03 <- fitted(lm(y~z3))
-      f04 <- fitted(lm(y~z4))
+      f01 <- fitted(lm(y~z1+x[,1]+x[,2]))
+      f02 <- fitted(lm(y~z2+x[,1]+x[,2]))
+      f03 <- fitted(lm(y~z3+x[,1]+x[,2]))
+      f04 <- fitted(lm(y~z4+x[,1]+x[,2]))
       
       #SMOOTHING MATRIX FOR KS--------------------------------------------------
       Smat<-function(z,bw){
@@ -1064,28 +1005,29 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       fh4_cp <- matrix(0,n,iter)
       ones <- matrix(1,n,1)
       x <- matrix(c(ones,x),n,3)
-      for (k in 1:4){
-        tp <- selectionKS(x,nc[,k],y)
-        tp.aic <- tp$lam.aic
-        tp.gcv <- tp$lam.gcv
-        tp.cp  <- tp$lam.cp
-        S_aic  <- Smat(nc[,k],tp.aic) 
-        S_gcv  <- Smat(nc[,k],tp.gcv)
-        S_cp   <- Smat(nc[,k],tp.cp)
-        
-        xtil.aic <- (diag(n)-S_aic)%*%x
-        xtil.gcv <- (diag(n)-S_gcv)%*%x
-        xtil.cp  <- (diag(n)-S_cp)%*%x
-        
-        H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
-        H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
-        H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
-        
-        ones <- matrix(1,n,1)
-        tol    <- 0.01
-        ctol   <- 99
-        i <- 1
-        while (ctol>=tol){
+      
+      
+      ones <- matrix(1,n,1)
+      tol    <- 0.01
+      ctol   <- 99
+      i <- 1
+      while (ctol>=tol){
+        for (k in 1:4){
+          tp <- selectionKS(x,nc[,k],y)
+          tp.aic <- tp$lam.aic
+          tp.gcv <- tp$lam.gcv
+          tp.cp  <- tp$lam.cp
+          S_aic  <- Smat(nc[,k],tp.aic) 
+          S_gcv  <- Smat(nc[,k],tp.gcv)
+          S_cp   <- Smat(nc[,k],tp.cp)
+          
+          xtil.aic <- (diag(n)-S_aic)%*%x
+          xtil.gcv <- (diag(n)-S_gcv)%*%x
+          xtil.cp  <- (diag(n)-S_cp)%*%x
+          
+          H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
+          H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
+          H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
           
           betai_aic   <- solve(t(x)%*%x)%*%t(x)%*%(y-alpha0-(fhat_aic[,k]+rowSums(allf[,-k]))) 
           fhat_aic[,k]<- S_aic%*%(y-alpha0-(x%*%betai_aic)-rowSums(allf[,-k]))
@@ -1137,10 +1079,11 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
             tol1      <-(mean(abs(fh1_gcv[,(i-1)]-fhat1_gcv)))
             ctol <- (tol1+tol2)/2
           }
-          i <- i+1
-          if (i==iter){
-            break
-          }
+          
+        }
+        i <- i+1
+        if (i==iter){
+          break
         }
       }
       #-------------------------------------------------------------------------------
@@ -1226,111 +1169,43 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
     size<-dim(nc)
     q<-size[2]
     #---------------------------------
-    Smat<-function(z,bw){
-      h<-0
-      n<-length(z)
-      for (b in 1:(n-1)) {
-        h[b]<-z[b+1]-z[b]
+    Smat = function(x, df,lam){
+      n = length(x);
+      A = matrix(0, n, n);
+      for(i in 1:n){
+        y = rep(0, n); y[i]=1;
+        yi = smooth.spline(x, y, df=df,spar=lam)$y;
+        A[,i]= yi;
       }
-      Q<-matrix(0,n,(n-2))
-      for (i in 1:(n-2)) {
-        for (j in 2:n) {
-          if (i==(j-1)) {
-            Q[j-1,i]<-(1/h[j-1])
-          }
-          if (i==j) {
-            Q[j-1,i]<- (-(1/h[j-1])+(1/h[j]))
-          }
-          if (i==(j+1)) {
-            Q[j-1,i]<-(1/h[j])
-          }
-          if (abs(i-j)>=2) {
-            Q[j-1,i]<-0
-          }
-        }
-      }
-      R<-matrix(0,n-2,n-2)
-      for (i in 2:(n-1)){
-        for (j in 2:(n-1)) {
-          if (i==j) {
-            R[j-1,i-1]<-1/3*(h[j-1]+h[j])
-          }
-          if (i==(j-1)) {
-            R[j-1,i-1]<-1/6*h[j]
-          }
-          if (i==(j+1)){
-            R[j-1,i-1]<-1/6*h[j]
-          }
-          if (abs(i-j)>=2) {
-            R[j-1,i-1]<-0
-          }
-        }
-      }
-      K<-matrix(0,n,n)
-      K<-(Q%*%solve(R)%*%t(Q))
-      SLL<-solve(diag(n)+bw*K)
-      return(SLL)
-    }
+      return(A)
+    } 
     if (q==2){
       #x: matrix of parametric covariates
       #y: response variable
       #nc: Matrix of nonparamtric covariate
-      f1<-allf[,1]
-      f2<-allf[,2]
+      f1<-(allf[,1])
+      f2<-scale(allf[,2])
       n<-length(y)
-      z1<-nc[,1]
-      z2<-nc[,2]
+      
+      z1<-scale(nc[,1])
+      z2<-scale(nc[,2])
       
       #BW SELECTION WITH f1 FUNCTION----------------------------------------------
       #Initialization-----------------------------------------------------------
-      f01 <- fitted(lm(y~z1))
-      f02 <- fitted(lm(y~z2)) 
+      f01 <- fitted(lm(y~z1+x[,1]+x[,2]))
+      f02 <- fitted(lm(y~z2+x[,1]+x[,2]))
+      
       #------------------------------------------------------------------------
-      Smat<-function(z,bw){
-        h<-0
-        n<-length(z)
-        for (b in 1:(n-1)) {
-          h[b]<-z[b+1]-z[b]
+      Smat = function(x, df,lam){
+        n = length(x);
+        A = matrix(0, n, n);
+        for(i in 1:n){
+          y = rep(0, n); y[i]=1;
+          yi = smooth.spline(x, y, df=df,spar=lam)$y;
+          A[,i]= yi;
         }
-        Q<-matrix(0,n,(n-2))
-        for (i in 1:(n-2)) {
-          for (j in 2:n) {
-            if (i==(j-1)) {
-              Q[j-1,i]<-(1/h[j-1])
-            }
-            if (i==j) {
-              Q[j-1,i]<- (-(1/h[j-1])+(1/h[j]))
-            }
-            if (i==(j+1)) {
-              Q[j-1,i]<-(1/h[j])
-            }
-            if (abs(i-j)>=2) {
-              Q[j-1,i]<-0
-            }
-          }
-        }
-        R<-matrix(0,n-2,n-2)
-        for (i in 2:(n-1)){
-          for (j in 2:(n-1)) {
-            if (i==j) {
-              R[j-1,i-1]<-1/3*(h[j-1]+h[j])
-            }
-            if (i==(j-1)) {
-              R[j-1,i-1]<-1/6*h[j]
-            }
-            if (i==(j+1)){
-              R[j-1,i-1]<-1/6*h[j]
-            }
-            if (abs(i-j)>=2) {
-              R[j-1,i-1]<-0
-            }
-          }
-        }
-        K<-matrix(0,n,n)
-        K<-(Q%*%solve(R)%*%t(Q))
-        SLL<-solve(diag(n)+bw*K)
-        return(SLL)
-      }
+        return(A)
+      } 
       selectionSS <- function(x,z,y){
         aic <- 0
         gcv <- 0
@@ -1363,56 +1238,21 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
           return(score)
         }
         #-----------------------------------------------------------------------------
-        Smat<-function(z,bw){
-          h<-0
-          n<-length(z)
-          for (b in 1:(n-1)) {
-            h[b]<-z[b+1]-z[b]
+        Smat = function(x, df,lam){
+          n = length(x);
+          A = matrix(0, n, n);
+          for(i in 1:n){
+            y = rep(0, n); y[i]=1;
+            yi = smooth.spline(x, y, df=df,spar=lam)$y;
+            A[,i]= yi;
           }
-          Q<-matrix(0,n,(n-2))
-          for (i in 1:(n-2)) {
-            for (j in 2:n) {
-              if (i==(j-1)) {
-                Q[j-1,i]<-(1/h[j-1])
-              }
-              if (i==j) {
-                Q[j-1,i]<- (-(1/h[j-1])+(1/h[j]))
-              }
-              if (i==(j+1)) {
-                Q[j-1,i]<-(1/h[j])
-              }
-              if (abs(i-j)>=2) {
-                Q[j-1,i]<-0
-              }
-            }
-          }
-          R<-matrix(0,n-2,n-2)
-          for (i in 2:(n-1)){
-            for (j in 2:(n-1)) {
-              if (i==j) {
-                R[j-1,i-1]<-1/3*(h[j-1]+h[j])
-              }
-              if (i==(j-1)) {
-                R[j-1,i-1]<-1/6*h[j]
-              }
-              if (i==(j+1)){
-                R[j-1,i-1]<-1/6*h[j]
-              }
-              if (abs(i-j)>=2) {
-                R[j-1,i-1]<-0
-              }
-            }
-          }
-          K<-matrix(0,n,n)
-          K<-(Q%*%solve(R)%*%t(Q))
-          SLL<-solve(diag(n)+bw*K)
-          return(SLL)
-        }
+          return(A)
+        } 
         n      <- length(y)
         index  <-seq(min(z)-0.1,max(z)+0.1,length.out=n)
-        tp_seq <-seq(0.000000000005,0.000000005,length.out = 50)
-        for (i in 1:50){
-          W    <- Smat(z,tp_seq[i]) 
+        tp_seq <-seq(0.7,0.85,length.out = 20)
+        for (i in 1:20){
+          W    <- Smat(z,2,tp_seq[i]) 
           xtil <- (diag(n)-W)%*%x
           ytil <- (diag(n)-W)%*%y
           
@@ -1424,7 +1264,7 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
           gcv[i] <- gcvfunc(y,yhat,H)
           cp[i]  <- cpfunc(y,yhat,H)
         }
-        for (i2 in 1:50){
+        for (i2 in 1:20){
           if (aic[i2]==min(aic)){
             lam_aic <- tp_seq[i2]
           }
@@ -1453,9 +1293,9 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       fhat1_cp <- f01
       fhat2_cp <- f02
       
-      fhat_aic <- matrix(0,n,2)
-      fhat_gcv <- matrix(0,n,2)
-      fhat_cp  <- matrix(0,n,2)
+      fhat_aic <- matrix(1,n,2)
+      fhat_gcv <- matrix(1,n,2)
+      fhat_cp  <- matrix(1,n,2)
       
       iter <- 100
       fh1_aic <- matrix(0,n,iter)
@@ -1466,27 +1306,29 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       
       fh1_cp <- matrix(0,n,iter)
       fh2_cp <- matrix(0,n,iter)
-      for (k in 1:2){
-        tp <- selectionSS(x,nc[,k],(y))
-        tp.aic <- tp$lam.aic
-        tp.gcv <- tp$lam.gcv
-        tp.cp  <- tp$lam.cp
-        S_aic  <- Smat(nc[,k],tp.aic) 
-        S_gcv  <- Smat(nc[,k],tp.gcv)
-        S_cp   <- Smat(nc[,k],tp.cp)
-        
-        xtil.aic <- (diag(n)-S_aic)%*%x
-        xtil.gcv <- (diag(n)-S_gcv)%*%x
-        xtil.cp  <- (diag(n)-S_cp)%*%x
-        
-        H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
-        H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
-        H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
-        
-        tol    <- 0.05
-        ctol   <- 99
-        i <- 1
-        while (ctol>=tol){
+      
+      
+      tol    <- 0.05
+      ctol   <- 99
+      i <- 1
+      
+      while (ctol>=tol){
+        for (k in 1:2){
+          tp <- selectionSS(x,nc[,k],(y))
+          tp.aic <- tp$lam.aic
+          tp.gcv <- tp$lam.gcv
+          tp.cp  <- tp$lam.cp
+          S_aic  <- Smat(nc[,k],2,tp.aic) 
+          S_gcv  <- Smat(nc[,k],2,tp.gcv)
+          S_cp   <- Smat(nc[,k],2,tp.cp)
+          
+          xtil.aic <- (diag(n)-S_aic)%*%x
+          xtil.gcv <- (diag(n)-S_gcv)%*%x
+          xtil.cp  <- (diag(n)-S_cp)%*%x
+          
+          H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)
+          H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)
+          H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)
           
           betai_aic   <- solve(t(x)%*%x)%*%t(x)%*%(y-alpha0-(fhat_aic[,k]+fhat_aic[,-k])) 
           fhat_aic[,k]<- S_aic%*%(y-alpha0-(x%*%betai_aic)-fhat_aic[,-k])
@@ -1520,11 +1362,13 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
             tol1      <-(mean(abs(fh1_gcv[,(i-1)]-fhat1_gcv)))
             ctol <- (tol1+tol2)/2
           }
-          i <- i+1
-          if (i==iter){
-            break
-          }
+          
         }
+        i <- i+1
+        if (i==iter){
+          break
+        }
+        
       }
       
       yhatBF_aic <- x%*%betai_aic+fhat1_aic+fhat2_aic
@@ -1565,71 +1409,36 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       #x: matrix of parametric covariates
       #y: response variable
       #nc: Matrix of nonparamtric covariate
-      f1<-allf[,1]
-      f2<-allf[,2]
-      f3<-allf[,3]
-      f4<-allf[,4]
+      f1<-scale(allf[,1])
+      f2<-scale(allf[,2])
+      f3<-scale(allf[,3])
+      f4<-scale(allf[,4])
       
       n<-length(y)
-      z1<-nc[,1]
-      z2<-nc[,3]
-      z3<-nc[,2]
-      z4<-nc[,4]
+      z1<-scale(nc[,1])
+      z2<-scale(nc[,3])
+      z3<-scale(nc[,2])
+      z4<-scale(nc[,4])
       
       
       #---------------------------------------------------------------------------
       #Initialization-----------------------------------------------------------
-      f01 <- fitted(lm(y~z1))
-      f02 <- fitted(lm(y~z2))
-      f03 <- fitted(lm(y~z3))
-      f04 <- fitted(lm(y~z4))
+      f01 <- fitted(lm(y~z1+x[,1]+x[,2]))
+      f02 <- fitted(lm(y~z2+x[,1]+x[,2]))
+      f03 <- fitted(lm(y~z3+x[,1]+x[,2]))
+      f04 <- fitted(lm(y~z4+x[,1]+x[,2]))
       
       #SMOOTHING MATRIX FOR KS--------------------------------------------------
-      Smat<-function(z,bw){
-        h<-0
-        n<-length(z)
-        for (b in 1:(n-1)) {
-          h[b]<-z[b+1]-z[b]
+      Smat = function(x, df,lam){
+        n = length(x);
+        A = matrix(0, n, n);
+        for(i in 1:n){
+          y = rep(0, n); y[i]=1;
+          yi = smooth.spline(x, y, df=df,spar=lam)$y;
+          A[,i]= yi;
         }
-        Q<-matrix(0,n,(n-2))
-        for (i in 1:(n-2)) {
-          for (j in 2:n) {
-            if (i==(j-1)) {
-              Q[j-1,i]<-(1/h[j-1])
-            }
-            if (i==j) {
-              Q[j-1,i]<- (-(1/h[j-1])+(1/h[j]))
-            }
-            if (i==(j+1)) {
-              Q[j-1,i]<-(1/h[j])
-            }
-            if (abs(i-j)>=2) {
-              Q[j-1,i]<-0
-            }
-          }
-        }
-        R<-matrix(0,n-2,n-2)
-        for (i in 2:(n-1)){
-          for (j in 2:(n-1)) {
-            if (i==j) {
-              R[j-1,i-1]<-1/3*(h[j-1]+h[j])
-            }
-            if (i==(j-1)) {
-              R[j-1,i-1]<-1/6*h[j]
-            }
-            if (i==(j+1)){
-              R[j-1,i-1]<-1/6*h[j]
-            }
-            if (abs(i-j)>=2) {
-              R[j-1,i-1]<-0
-            }
-          }
-        }
-        K<-matrix(0,n,n)
-        K<-(Q%*%solve(R)%*%t(Q))
-        SLL<-solve(diag(n)+bw*K)
-        return(SLL)
-      }
+        return(A)
+      } 
       selectionSS <- function(x,z,y){
         aic <- 0
         gcv <- 0
@@ -1662,68 +1471,33 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
           return(score)
         }
         #-----------------------------------------------------------------------------
-        Smat<-function(z,bw){
-          h<-0
-          n<-length(z)
-          for (b in 1:(n-1)) {
-            h[b]<-z[b+1]-z[b]
+        Smat = function(x, df,lam){
+          n = length(x);
+          A = matrix(0, n, n);
+          for(i in 1:n){
+            y = rep(0, n); y[i]=1;
+            yi = smooth.spline(x, y, df=df,spar=lam)$y;
+            A[,i]= yi;
           }
-          Q<-matrix(0,n,(n-2))
-          for (i in 1:(n-2)) {
-            for (j in 2:n) {
-              if (i==(j-1)) {
-                Q[j-1,i]<-(1/h[j-1])
-              }
-              if (i==j) {
-                Q[j-1,i]<- (-(1/h[j-1])+(1/h[j]))
-              }
-              if (i==(j+1)) {
-                Q[j-1,i]<-(1/h[j])
-              }
-              if (abs(i-j)>=2) {
-                Q[j-1,i]<-0
-              }
-            }
-          }
-          R<-matrix(0,n-2,n-2)
-          for (i in 2:(n-1)){
-            for (j in 2:(n-1)) {
-              if (i==j) {
-                R[j-1,i-1]<-1/3*(h[j-1]+h[j])
-              }
-              if (i==(j-1)) {
-                R[j-1,i-1]<-1/6*h[j]
-              }
-              if (i==(j+1)){
-                R[j-1,i-1]<-1/6*h[j]
-              }
-              if (abs(i-j)>=2) {
-                R[j-1,i-1]<-0
-              }
-            }
-          }
-          K<-matrix(0,n,n)
-          K<-(Q%*%solve(R)%*%t(Q))
-          SLL<-solve(diag(n)+bw*K)
-          return(SLL)
-        }
+          return(A)
+        } 
         n      <- length(y)
         index  <-seq(min(z)-0.1,max(z)+0.1,length.out=n)
-        tp_seq <-seq(0.000000000005,0.000000005,length.out = 50)
-        for (i in 1:50){
-          W    <- Smat(z,tp_seq[i]) 
+        tp_seq <-seq(0.7,0.85,length.out = 20)
+        for (i in 1:20){
+          W    <- Smat(z,2,tp_seq[i]) 
           xtil <- (diag(n)-W)%*%x
           ytil <- (diag(n)-W)%*%y
           
-          beta <- solve(t(xtil)%*%xtil)%*%t(xtil)%*%ytil
+          beta <- solve(t(xtil)%*%xtil,tol=1e-100)%*%t(xtil)%*%ytil
           fhat <- W%*%(y-x%*%beta)
           yhat <- x%*%beta+fhat
-          H    <- W+xtil%*%solve(t(xtil)%*%xtil)%*%t(x)%*%(diag(n)-W)^2
+          H    <- W+xtil%*%solve(t(xtil)%*%xtil,tol=1e-100)%*%t(x)%*%(diag(n)-W)
           aic[i] <- aiccfunc(y,yhat,H)
           gcv[i] <- gcvfunc(y,yhat,H)
           cp[i]  <- cpfunc(y,yhat,H)
         }
-        for (i2 in 1:50){
+        for (i2 in 1:20){
           if (aic[i2]==min(aic)){
             lam_aic <- tp_seq[i2]
           }
@@ -1779,28 +1553,27 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
       fh4_cp <- matrix(0,n,iter)
       ones <- matrix(1,n,1)
       x <- matrix(c(ones,x),n,3)
-      for (k in 1:4){
-        tp <- selectionSS(x,nc[,k],y)
-        tp.aic <- tp$lam.aic
-        tp.gcv <- tp$lam.gcv
-        tp.cp  <- tp$lam.cp
-        S_aic  <- Smat(nc[,k],tp.aic) 
-        S_gcv  <- Smat(nc[,k],tp.gcv)
-        S_cp   <- Smat(nc[,k],tp.cp)
-        
-        xtil.aic <- (diag(n)-S_aic)%*%x
-        xtil.gcv <- (diag(n)-S_gcv)%*%x
-        xtil.cp  <- (diag(n)-S_cp)%*%x
-        
-        H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic)%*%t(x)%*%(diag(n)-S_aic)^2
-        H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv)%*%t(x)%*%(diag(n)-S_gcv)^2
-        H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp)%*%t(x)%*%(diag(n)-S_cp)^2
-        
-        ones <- matrix(1,n,1)
-        tol    <- 0.01
-        ctol   <- 99
-        i <- 1
-        while (ctol>=tol){
+      
+      tol    <- 0.05
+      ctol   <- 99
+      i <- 1
+      while (ctol>=tol){
+        for (k in 1:4){
+          tp <- selectionSS(x,nc[,k],y)
+          tp.aic <- tp$lam.aic
+          tp.gcv <- tp$lam.gcv
+          tp.cp  <- tp$lam.cp
+          S_aic  <- Smat(nc[,k],2,tp.aic) 
+          S_gcv  <- Smat(nc[,k],2,tp.gcv)
+          S_cp   <- Smat(nc[,k],2,tp.cp)
+          
+          xtil.aic <- (diag(n)-S_aic)%*%x
+          xtil.gcv <- (diag(n)-S_gcv)%*%x
+          xtil.cp  <- (diag(n)-S_cp)%*%x
+          
+          H.aic <- S_aic+xtil.aic%*%solve(t(xtil.aic)%*%xtil.aic,tol=1e-100)%*%t(x)%*%(diag(n)-S_aic)
+          H.gcv <- S_gcv+xtil.gcv%*%solve(t(xtil.gcv)%*%xtil.gcv,tol=1e-100)%*%t(x)%*%(diag(n)-S_gcv)
+          H.cp  <- S_cp+xtil.cp%*%solve(t(xtil.cp)%*%xtil.cp,tol=1e-100)%*%t(x)%*%(diag(n)-S_cp)
           
           betai_aic   <- solve(t(x)%*%x)%*%t(x)%*%(y-alpha0-(fhat_aic[,k]+rowSums(allf[,-k]))) 
           fhat_aic[,k]<- S_aic%*%(y-alpha0-(x%*%betai_aic)-rowSums(allf[,-k]))
@@ -1852,10 +1625,11 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
             tol1      <-(mean(abs(fh1_gcv[,(i-1)]-fhat1_gcv)))
             ctol <- (tol1+tol2)/2
           }
-          i <- i+1
-          if (i==iter){
-            break
-          }
+          
+        }
+        i <- i+1
+        if (i==iter){
+          break
         }
       }
       #-------------------------------------------------------------------------------
@@ -1927,142 +1701,4 @@ Analyse <- function(condition, dat, fixed_objects = NULL) {
     res$H.cp       <-H.cp
     
     return(res)
-  }   
-  
-  LLR_estimates<-SPAMLL(dat$x,dat$y,dat$nc,dat$allf)
-  KS_estimates<-SPAMKS(dat$x,dat$y,dat$nc,dat$allf)
-  SS_estimates<-SPAMSS(dat$x,dat$y,dat$nc,dat$allf)
-  #-------------------------------------------------
-  #FUNCTIONS OF EVALUATION METRICS------------------------------------------------
-  #Functions
-  #arg: model object from SPAM functions
-  biasfunc<-function(Smat,x,fhat){
-    sumf<-rowSums(fhat)
-    n <- length(sumf)
-    xtil<-(diag(n)-Smat)%*%x 
-    ftil<-(diag(n)-Smat)%*%sumf
-    bias<-solve(t(x)%*%xtil)%*%t(x)%*%ftil
-    return(bias)
-  }
-  varfunc <-function(Smat,x,y,yhat,H){
-    n    <-length(y)
-    xtil<-(diag(n)-Smat)%*%x
-    sig2<-sum((y-yhat)^2)/((tr(diag(n)-H))^2)
-    var  <-sig2*solve(t(x)%*%xtil)%*%t(x)%*%((diag(n)-Smat)^2)%*%x%*%solve(t(x)%*%xtil)
-    return(var)
-  }
-  smdefunc<-function(var,bias){
-    smde<-sum(diag(var)+bias^2)
-    return(smde)
-  }
-  REfunc<-function(smde1,smde2){
-    re<-smde1/smde2
-    return(re)
-  }
-  msefunc<-function(allf,q,fhat){
-    sim <- 1000
-    MSE<-0
-    for (i in 1:q){
-      MSE[i]<-sum((allf[,i]-fhat[,i])^2)/sim
-    }
-    return(MSE)
-  }
-  amsefunc<-function(allf,q,fhat){
-    sim <- 1000
-    sumfhat<-rowSums(fhat)
-    sumf   <-rowSums(allf)
-    amse   <-(sum((sumfhat-sumf)^2)/q)/sim 
-    return(amse)
-  }
-  ###############################################################################
-  #BIASES------------------------------------------------------------------------
-  bias.LL_AIC <- biasfunc(LLR_estimates$Smat.aic,dat$x,LLR_estimates$fhat_aic)
-  bias.LL_GCV <- biasfunc(LLR_estimates$Smat.gcv,dat$x,LLR_estimates$fhat_gcv)
-  bias.LL_Cp <- biasfunc(LLR_estimates$Smat.cp,dat$x,LLR_estimates$fhat_cp)
-  #----------------------------------------------------------------------
-  bias.KS_AIC <- biasfunc(KS_estimates$Smat.aic,dat$x,KS_estimates$fhat_aic)
-  bias.KS_GCV <- biasfunc(KS_estimates$Smat.gcv,dat$x,KS_estimates$fhat_gcv)
-  bias.KS_Cp <- biasfunc(KS_estimates$Smat.cp,dat$x,KS_estimates$fhat_cp)
-  #----------------------------------------------------------------------
-  bias.SS_AIC <- biasfunc(SS_estimates$Smat.aic,dat$x,SS_estimates$fhat_aic)
-  bias.SS_GCV <- biasfunc(SS_estimates$Smat.gcv,dat$x,SS_estimates$fhat_gcv)
-  bias.SS_Cp <- biasfunc(SS_estimates$Smat.cp,dat$x,SS_estimates$fhat_cp)
-  #-----------------------------------------------------------------------
-  size<-dim(dat$nc)
-  q<-size[2]
-  p<-2
-  #VARIANCES---------------------------------------------------------------------
-  var.LL_AIC <- varfunc(LLR_estimates$Smat.aic,dat$x,dat$y,LLR_estimates$fitted_aic,LLR_estimates$H.aic)
-  var.LL_GCV <- varfunc(LLR_estimates$Smat.gcv,dat$x,dat$y,LLR_estimates$fitted_gcv,LLR_estimates$H.gcv)
-  var.LL_Cp <- varfunc(LLR_estimates$Smat.cp,dat$x,dat$y,LLR_estimates$fitted_cp,LLR_estimates$H.cp)
-  #-----------------------------------------------------------------------------
-  var.KS_AIC <- varfunc(KS_estimates$Smat.aic,dat$x,dat$y,KS_estimates$fitted_aic,KS_estimates$H.aic)
-  var.KS_GCV <- varfunc(KS_estimates$Smat.gcv,dat$x,dat$y,KS_estimates$fitted_gcv,KS_estimates$H.gcv)
-  var.KS_Cp <- varfunc(KS_estimates$Smat.cp,dat$x,dat$y,KS_estimates$fitted_cp,KS_estimates$H.cp)
-  #------------------------------------------------------------------------------
-  var.SS_AIC <- varfunc(SS_estimates$Smat.aic,dat$x,dat$y,SS_estimates$fitted_aic,SS_estimates$H.aic)
-  var.SS_GCV <- varfunc(SS_estimates$Smat.gcv,dat$x,dat$y,SS_estimates$fitted_gcv,SS_estimates$H.gcv)
-  var.SS_Cp <- varfunc(SS_estimates$Smat.cp,dat$x,dat$y,SS_estimates$fitted_cp,SS_estimates$H.cp)
-  #SMDES-------------------------------------------------------------------------
-  SMDE.LL_AIC<-smdefunc(var.LL_AIC,bias.LL_AIC)
-  SMDE.LL_GCV<-smdefunc(var.LL_GCV,bias.LL_GCV)
-  SMDE.LL_Cp<-smdefunc(var.LL_Cp,bias.LL_Cp)
-  #--------------------------------------------------------------------------------
-  SMDE.KS_AIC<-smdefunc(var.KS_AIC,bias.KS_AIC)
-  SMDE.KS_GCV<-smdefunc(var.KS_GCV,bias.KS_GCV)
-  SMDE.KS_Cp<-smdefunc(var.KS_Cp,bias.KS_Cp)
-  #---------------------------------------------------------------------------------
-  SMDE.SS_AIC<-smdefunc(var.SS_AIC,bias.SS_AIC)
-  SMDE.SS_GCV<-smdefunc(var.SS_GCV,bias.SS_GCV)
-  SMDE.SS_Cp<-smdefunc(var.SS_Cp,bias.SS_Cp)
-  #Relative Efficiencies (RE)-----------------------------------------------------
-  RE.LL_AIC <-c(REfunc(SMDE.LL_AIC,SMDE.KS_AIC),REfunc(SMDE.LL_AIC,SMDE.SS_AIC))    #LL/KS, LL/SS
-  RE.LL_GCV <-c(REfunc(SMDE.LL_GCV,SMDE.KS_GCV),REfunc(SMDE.LL_GCV,SMDE.SS_GCV))    #LL/KS, LL/SS
-  RE.LL_Cp  <-c(REfunc(SMDE.LL_Cp,SMDE.KS_Cp),REfunc(SMDE.LL_Cp,SMDE.SS_Cp))        #LL/KS, LL/SS
-  #---------------------------------------------------------------------------------  
-  RE.KS_AIC <-c(REfunc(SMDE.KS_AIC,SMDE.LL_AIC),REfunc(SMDE.KS_AIC,SMDE.SS_AIC))    #KS/LL, KS/SS
-  RE.KS_GCV <-c(REfunc(SMDE.KS_GCV,SMDE.LL_GCV),REfunc(SMDE.KS_GCV,SMDE.SS_GCV))    #KS/LL, KS/SS
-  RE.KS_Cp  <-c(REfunc(SMDE.KS_Cp,SMDE.LL_Cp),REfunc(SMDE.KS_Cp,SMDE.SS_Cp))        #KS/LL, KS/SS
-  #---------------------------------------------------------------------------------  
-  RE.SS_AIC  <-c(REfunc(SMDE.SS_AIC,SMDE.LL_AIC),REfunc(SMDE.SS_AIC,SMDE.KS_AIC))   #SS/LL, SS/KS
-  RE.SS_GCV  <-c(REfunc(SMDE.SS_GCV,SMDE.LL_GCV),REfunc(SMDE.SS_GCV,SMDE.KS_GCV))   #SS/LL, SS/KS
-  RE.SS_Cp   <-c(REfunc(SMDE.SS_Cp,SMDE.LL_Cp),REfunc(SMDE.SS_Cp,SMDE.KS_Cp))       #SS/LL, SS/KS
-  #MSE----------------------------------------------------------------------------
-  MSE.LL_AIC <-msefunc(dat$allf,q,LLR_estimates$fhat_aic)
-  MSE.LL_GCV <-msefunc(dat$allf,q,LLR_estimates$fhat_gcv)
-  MSE.LL_Cp  <-msefunc(dat$allf,q,LLR_estimates$fhat_cp)
-  #--------------------------------------------------------------------------------
-  MSE.KS_AIC <-msefunc(dat$allf,q,KS_estimates$fhat_aic)
-  MSE.KS_GCV <-msefunc(dat$allf,q,KS_estimates$fhat_gcv)
-  MSE.KS_Cp  <-msefunc(dat$allf,q,KS_estimates$fhat_cp)
-  #--------------------------------------------------------------------------------
-  MSE.SS_AIC <-msefunc(dat$allf,q,SS_estimates$fhat_aic)
-  MSE.SS_GCV <-msefunc(dat$allf,q,SS_estimates$fhat_gcv)
-  MSE.SS_Cp  <-msefunc(dat$allf,q,SS_estimates$fhat_cp)
-  #AMSE----------------------------------------------------------------------------
-  AMSE.LL_AIC  <-amsefunc(dat$allf,q,LLR_estimates$fhat_aic)
-  AMSE.LL_GCV  <-amsefunc(dat$allf,q,LLR_estimates$fhat_gcv)
-  AMSE.LL_Cp  <-amsefunc(dat$allf,q,LLR_estimates$fhat_cp)
-  #--------------------------------------------------------------------------------
-  AMSE.KS_AIC  <-amsefunc(dat$allf,q,KS_estimates$fhat_aic)
-  AMSE.KS_GCV  <-amsefunc(dat$allf,q,KS_estimates$fhat_gcv)
-  AMSE.KS_Cp   <-amsefunc(dat$allf,q,KS_estimates$fhat_cp)
-  #--------------------------------------------------------------------------------
-  AMSE.SS_AIC  <-amsefunc(dat$allf,q,SS_estimates$fhat_aic)
-  AMSE.SS_GCV  <-amsefunc(dat$allf,q,SS_estimates$fhat_gcv)
-  AMSE.SS_Cp   <-amsefunc(dat$allf,q,SS_estimates$fhat_cp)
-  
-  ret1 <- c(BiasLL.AIC=bias.LL_AIC,BiasLL.GCV=bias.LL_GCV, BiasLL.Cp=bias.LL_Cp, BiasKS.AIC=bias.KS_AIC,BiasKS.GCV=bias.KS_GCV,BiasKS.Cp=bias.KS_Cp,BiasSS.AIC=bias.SS_AIC,BiasSS.GCV=bias.SS_GCV,BiasSS.Cp=bias.SS_Cp,varLL.AIC=var.LL_AIC,varLL.GCV=var.LL_GCV,varLL.Cp=var.LL_Cp,varKS.AIC=var.KS_AIC,varKS.GCV=var.KS_GCV,varKS.Cp=var.KS_Cp,varSS.AIC=var.SS_AIC, varSS.GCV=var.SS_GCV,varSS.Cp=var.SS_Cp)
-  ret2 <-c(SMDELL.AIC=SMDE.LL_AIC,SMDELL.GCV=SMDE.LL_GCV,SMDELL.Cp=SMDE.LL_Cp,SMDEKS.AIC=SMDE.KS_AIC,SMDEKS.GCV=SMDE.KS_GCV,SMDEKS.Cp=SMDE.KS_Cp,SMDESS.AIC=SMDE.SS_AIC,SMDESS.GCV=SMDE.SS_GCV,SMDESS.Cp=SMDE.SS_Cp) 
-  ret3 <- c(RELL.AIC=RE.LL_AIC,RELL.GCV=RE.LL_GCV,RELL.Cp=RE.LL_Cp,REKS.AIC=RE.KS_AIC,REKS.GCV=RE.KS_GCV,REKS.Cp=RE.KS_Cp,RESS.AIC=RE.SS_AIC,RESS.GCV=RE.SS_GCV,RESS.Cp=RE.SS_Cp)
-  ret4 <- c(MSELL.AIC=MSE.LL_AIC,MSELL.GCV=MSE.LL_GCV,MSELL.Cp=MSE.LL_Cp,MSEKS.AIC=MSE.KS_AIC,MSEKS.GCV=MSE.KS_GCV,MSEKS.Cp=MSE.KS_Cp,MSESS.AIC=MSE.SS_AIC,MSESS.GCV=MSE.SS_GCV,MSESS.Cp=MSE.SS_Cp)
-  ret5 <- c(AMSELL.AIC=AMSE.LL_AIC,AMSELL.GCV=AMSE.LL_GCV,AMSELL.Cp=AMSE.LL_Cp,AMSEKS.AIC=AMSE.KS_AIC,AMSEKS.GCV=AMSE.KS_GCV,AMSEKS.Cp=AMSE.KS_Cp,AMSESS.AIC=AMSE.SS_AIC,AMSESS.GCV=AMSE.SS_GCV,AMSESS.Cp=AMSE.SS_Cp)
-  
-  ret <-c(ret1,ret2,ret3,ret4,ret5)
-  ret
-  #------------------------------------------------------------------------------------
-  
-}
-
-res <- runSimulation(des, replications = 2, generate=Generate, 
-                     analyse=Analyse)
+  }  
